@@ -27,35 +27,60 @@
         <!-- Mode Tabs -->
         <div class="panel card">
           <h2>Modo de Conexão</h2>
-          <div class="mode-selector">
-            <button class="tab-btn active" id="tabHost">Criar Sala (Host)</button>
-            <button class="tab-btn" id="tabJoin">Conectar (Amigo)</button>
+          <div class="method-selector">
+            <button class="method-btn active" id="btnMethodDirect">Conexão Direta (IP/UPnP)</button>
+            <button class="method-btn" id="btnMethodCode">Código P2P (Sem Roteador)</button>
           </div>
 
-          <!-- Host View -->
-          <div id="hostSection" class="mode-content">
-            <div class="form-group">
-              <label>Porta Local:</label>
-              <input type="number" id="hostPort" value="8765" />
+          <!-- Direct / UPnP Method -->
+          <div id="directMethodSection">
+            <div class="mode-selector">
+              <button class="tab-btn active" id="tabHost">Criar Sala (Host)</button>
+              <button class="tab-btn" id="tabJoin">Conectar (Amigo)</button>
             </div>
-            <button class="btn btn-primary" id="btnStartHost">Iniciar Sala Local</button>
-            <div id="hostInfo" class="info-box hidden">
-              <p>Envie este endereço para seu amigo:</p>
-              <div class="ip-list" id="localIpList"></div>
+
+            <!-- Host View -->
+            <div id="hostSection" class="mode-content">
+              <div class="form-group">
+                <label>Porta (abertura automática no roteador via UPnP):</label>
+                <input type="number" id="hostPort" value="8765" />
+              </div>
+              <button class="btn btn-primary" id="btnStartHost">Iniciar Sala Local</button>
+              <div id="hostInfo" class="info-box hidden">
+                <p><b>Endereços para enviar ao amigo:</b></p>
+                <div id="upnpNotice" class="notice-badge"></div>
+                <div class="ip-list" id="localIpList"></div>
+              </div>
+            </div>
+
+            <!-- Join View -->
+            <div id="joinSection" class="mode-content hidden">
+              <div class="form-group">
+                <label>IP do seu amigo (Local ou Público):</label>
+                <input type="text" id="joinIp" placeholder="Ex: 177.200.x.x ou 192.168.x.x" />
+              </div>
+              <div class="form-group">
+                <label>Porta:</label>
+                <input type="number" id="joinPort" value="8765" />
+              </div>
+              <button class="btn btn-primary" id="btnJoinHost">Conectar ao Host</button>
             </div>
           </div>
 
-          <!-- Join View -->
-          <div id="joinSection" class="mode-content hidden">
-            <div class="form-group">
-              <label>IP do Host (ou Radmin/ZeroTier/Tailscale):</label>
-              <input type="text" id="joinIp" placeholder="Ex: 192.168.1.50 ou IP VPN" />
+          <!-- Code / Manual P2P Punching Method (Zero VPN, Zero Router Port) -->
+          <div id="codeMethodSection" class="hidden">
+            <p class="section-desc">Conexão P2P com perfuração NAT automática. Nenhum programa externo ou configuração de roteador necessária.</p>
+            <div class="code-actions">
+              <button class="btn btn-primary" id="btnGenerateOffer">1. Gerar Código de Conexão</button>
             </div>
-            <div class="form-group">
-              <label>Porta:</label>
-              <input type="number" id="joinPort" value="8765" />
+            <div class="form-group" style="margin-top: 10px;">
+              <label>Código da Sala (Copie e mande pro amigo / Cole o dele):</label>
+              <textarea id="p2pCodeBox" rows="3" placeholder="Clique no botão acima ou cole o código que seu amigo lhe enviou..."></textarea>
             </div>
-            <button class="btn btn-primary" id="btnJoinHost">Conectar ao Host</button>
+            <div class="code-flow-buttons">
+              <button class="btn btn-secondary" id="btnCopyCode">Copiar Código</button>
+              <button class="btn btn-primary" id="btnApplyCode">2. Processar Código</button>
+            </div>
           </div>
         </div>
 
@@ -115,11 +140,11 @@
             </div>
             <div class="stat-item">
               <span class="stat-label">Codec Áudio:</span>
-              <span class="stat-val">Opus 48kHz (LowDelay)</span>
+              <span class="stat-val">Opus 48kHz (5ms)</span>
             </div>
             <div class="stat-item">
-              <span class="stat-label">Tipo Conexão:</span>
-              <span class="stat-val" id="statCandidate">Direta / P2P Local</span>
+              <span class="stat-label">Status NAT:</span>
+              <span class="stat-val" id="statCandidate">Direto P2P UDP</span>
             </div>
           </div>
         </div>
@@ -150,7 +175,7 @@
             <div class="screen-placeholder" id="screenPlaceholder">
               <div class="placeholder-icon">🖥️</div>
               <h3>Nenhuma tela sendo compartilhada no momento</h3>
-              <p>Clique em <b>Compartilhar Minha Tela</b> para transmitir para seu amigo com 60 FPS e sem servidor intermediário.</p>
+              <p>Clique em <b>Compartilhar Minha Tela</b> para transmitir para seu amigo com 60 FPS sem servidor intermediário.</p>
             </div>
           </div>
         </div>

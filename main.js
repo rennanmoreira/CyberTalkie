@@ -3,16 +3,18 @@ const path = require('path');
 const http = require('http');
 const { WebSocketServer } = require('ws');
 const os = require('os');
+const natUpnp = require('nat-upnp');
 
 let mainWindow;
 let localSignalingServer = null;
+let upnpClient = null;
+let upnpMappedPort = null;
 
 function getLocalIpAddresses() {
   const interfaces = os.networkInterfaces();
   const addresses = [];
   for (const name of Object.keys(interfaces)) {
     for (const net of interfaces[name]) {
-      // IPv4 only and non-internal
       if (net.family === 'IPv4' && !net.internal) {
         addresses.push({ interface: name, address: net.address });
       }
@@ -23,10 +25,10 @@ function getLocalIpAddresses() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 980,
-    height: 720,
-    minWidth: 700,
-    minHeight: 500,
+    width: 1040,
+    height: 780,
+    minWidth: 780,
+    minHeight: 560,
     backgroundColor: '#0a0d14',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -43,6 +45,40 @@ function createWindow() {
 // IPC Handlers
 ipcMain.handle('get-local-ips', () => {
   return getLocalIpAddresses();
+});
+
+// UPnP Automatic Port Mapping (Open router port automatically with zero config)
+ipcMain.handle('try-upnp-map', async (event, port = 8765) => {
+  return new Promise((resolve) => {
+    try {
+      if (!upnpClient) {
+        upnpClient = natUpnp.createClient();
+      }
+
+      // Map both TCP (for local WebSocket signaling) and UDP (for WebRTC media)
+      upnpClient.portMapping({
+        public: port,
+        private: port,
+        ttl: 7200,
+        description: 'CyberTalkie P2P Port'
+      }, (err) => {
+        if (err) {
+          console.log('UPnP port map notice:', err.message);
+          // Try to get external IP anyway
+          upnpClient.externalIp((ipErr, ip) => {
+            resolve({ success: false, externalIp: ip || null, error: err.message });
+          });
+        } else {
+          upnpMappedPort = port;
+          upnpClient.externalIp((ipErr, ip) => {
+            resolve({ success: true, externalIp: ip || null, port });
+          });
+        }
+      });
+    } catch (e) {
+      resolve({ success: false, error: e.message });
+    }
+  });
 });
 
 ipcMain.handle('start-host-server', (event, port = 8765) => {
@@ -63,7 +99,6 @@ ipcMain.handle('start-host-server', (event, port = 8765) => {
         clients.add(ws);
         
         ws.on('message', (message) => {
-          // Broadcast to other peers
           for (const client of clients) {
             if (client !== ws && client.readyState === ws.OPEN) {
               client.send(message.toString());
@@ -104,6 +139,11 @@ ipcMain.handle('stop-host-server', () => {
     localSignalingServer.close();
     localSignalingServer = null;
   }
+  if (upnpClient && upnpMappedPort) {
+    try {
+      upnpClient.portUnmapping({ public: upnpMappedPort });
+    } catch (e) {}
+  }
   return true;
 });
 
@@ -132,6 +172,11 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     if (localSignalingServer) {
       localSignalingServer.close();
+    }
+    if (upnpClient && upnpMappedPort) {
+      try {
+        upnpClient.portUnmapping({ public: upnpMappedPort });
+      } catch (e) {}
     }
     app.quit();
   }

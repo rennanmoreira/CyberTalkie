@@ -34,6 +34,7 @@
   "author": "Rennan Moreira",
   "license": "MIT",
   "dependencies": {
+    "nat-upnp": "^1.1.1",
     "ws": "^8.18.0"
   },
   "devDependencies": {

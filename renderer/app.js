@@ -15,6 +15,11 @@ let remoteAnalyser = null;
 let statsInterval = null;
 
 // DOM Elements
+const btnMethodDirect = document.getElementById('btnMethodDirect');
+const btnMethodCode = document.getElementById('btnMethodCode');
+const directMethodSection = document.getElementById('directMethodSection');
+const codeMethodSection = document.getElementById('codeMethodSection');
+
 const tabHost = document.getElementById('tabHost');
 const tabJoin = document.getElementById('tabJoin');
 const hostSection = document.getElementById('hostSection');
@@ -26,6 +31,12 @@ const joinIp = document.getElementById('joinIp');
 const joinPort = document.getElementById('joinPort');
 const hostInfo = document.getElementById('hostInfo');
 const localIpList = document.getElementById('localIpList');
+const upnpNotice = document.getElementById('upnpNotice');
+
+const btnGenerateOffer = document.getElementById('btnGenerateOffer');
+const p2pCodeBox = document.getElementById('p2pCodeBox');
+const btnCopyCode = document.getElementById('btnCopyCode');
+const btnApplyCode = document.getElementById('btnApplyCode');
 
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
@@ -57,13 +68,14 @@ const screenPickerModal = document.getElementById('screenPickerModal');
 const screenList = document.getElementById('screenList');
 const btnCloseModal = document.getElementById('btnCloseModal');
 
-// WebRTC Configuration optimized for direct host/p2p communication
+// STUN servers for NAT punch-through without intermediate media relay
 const rtcConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' }
   ],
-  iceCandidatePoolSize: 2
+  iceCandidatePoolSize: 4
 };
 
 // Initialize device lists
@@ -87,14 +99,13 @@ async function startLocalAudio() {
   try {
     const deviceId = micSelect.value ? { exact: micSelect.value } : undefined;
     
-    // Constraints tuned for ultra-low latency Opus
     const audioConstraints = {
       deviceId: deviceId,
       echoCancellation: true,
       noiseSuppression: true,
       autoGainControl: true,
       channelCount: 1,
-      latency: 0.005, // 5ms requested buffer
+      latency: 0.005,
       sampleRate: 48000
     };
 
@@ -105,7 +116,6 @@ async function startLocalAudio() {
 
     setupLocalMeter(localAudioStream);
 
-    // If peerConnection exists, replace or add track
     if (peerConnection) {
       const audioTrack = localAudioStream.getAudioTracks()[0];
       const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
@@ -170,7 +180,7 @@ function setupRemoteMeter(stream) {
 }
 
 // Initialize WebRTC Peer Connection
-function createPeerConnection() {
+function createPeerConnection(onIceComplete = null) {
   if (peerConnection) {
     peerConnection.close();
   }
@@ -214,8 +224,15 @@ function createPeerConnection() {
 
   // ICE candidates
   peerConnection.onicecandidate = (event) => {
-    if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
+    if (event.candidate) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
+      }
+    } else {
+      // ICE gathering complete
+      if (onIceComplete) {
+        onIceComplete();
+      }
     }
   };
 
@@ -228,7 +245,6 @@ function createPeerConnection() {
     }
   };
 
-  // Optimize audio codec parameters in SDP for lowest latency
   return peerConnection;
 }
 
@@ -274,7 +290,7 @@ function stopStatsMonitor() {
   statJitter.innerText = '-- ms';
 }
 
-// Connect to Signaling Server
+// WebSocket Signaling (Method 1)
 function connectSignaling(address) {
   ws = new WebSocket(address);
 
@@ -282,7 +298,6 @@ function connectSignaling(address) {
     updateStatus('connecting');
     createPeerConnection();
 
-    // If Host, create WebRTC offer
     if (isHost) {
       makeOffer();
     }
@@ -332,22 +347,59 @@ async function makeOffer() {
   ws.send(JSON.stringify({ type: 'offer', offer }));
 }
 
-// Host button handler
+// Method Switching
+btnMethodDirect.addEventListener('click', () => {
+  btnMethodDirect.classList.add('active');
+  btnMethodCode.classList.remove('active');
+  directMethodSection.classList.remove('hidden');
+  codeMethodSection.classList.add('hidden');
+});
+
+btnMethodCode.addEventListener('click', () => {
+  btnMethodCode.classList.add('active');
+  btnMethodDirect.classList.remove('active');
+  codeMethodSection.classList.remove('hidden');
+  directMethodSection.classList.add('hidden');
+});
+
+// UPnP / Host Handler
 btnStartHost.addEventListener('click', async () => {
   const port = parseInt(hostPort.value) || 8765;
   try {
     await window.electronAPI.startHostServer(port);
     const ips = await window.electronAPI.getLocalIps();
+    
+    // Attempt UPnP automatic router port forwarding
+    upnpNotice.innerText = 'Configurando UPnP no roteador...';
+    const upnpRes = await window.electronAPI.tryUpnpMap(port);
+
     localIpList.innerHTML = '';
+
+    if (upnpRes.success) {
+      upnpNotice.innerText = '✅ Porta aberta automaticamente no roteador via UPnP!';
+      if (upnpRes.externalIp) {
+        const extBadge = document.createElement('span');
+        extBadge.className = 'ip-badge';
+        extBadge.innerText = `🌐 IP Público (Internet): ${upnpRes.externalIp}:${port}`;
+        extBadge.title = 'Clique para copiar IP público';
+        extBadge.addEventListener('click', () => {
+          navigator.clipboard.writeText(upnpRes.externalIp);
+          alert(`IP Público ${upnpRes.externalIp} copiado! Seu amigo pode conectar diretamente por ele.`);
+        });
+        localIpList.appendChild(extBadge);
+      }
+    } else {
+      upnpNotice.innerText = 'ℹ️ Use o IP local se estiver na mesma rede, ou use a aba "Código P2P" para conectar pela Internet.';
+    }
 
     ips.forEach(item => {
       const badge = document.createElement('span');
       badge.className = 'ip-badge';
-      badge.innerText = `${item.address}:${port} (${item.interface})`;
+      badge.innerText = `🏠 IP Local: ${item.address}:${port} (${item.interface})`;
       badge.title = 'Clique para copiar';
       badge.addEventListener('click', () => {
         navigator.clipboard.writeText(item.address);
-        alert(`IP ${item.address} copiado para a área de transferência! Envie para seu amigo.`);
+        alert(`IP ${item.address} copiado para a área de transferência!`);
       });
       localIpList.appendChild(badge);
     });
@@ -363,7 +415,7 @@ btnStartHost.addEventListener('click', async () => {
   }
 });
 
-// Join button handler
+// Join Handler
 btnJoinHost.addEventListener('click', () => {
   const ip = joinIp.value.trim();
   const port = parseInt(joinPort.value) || 8765;
@@ -375,7 +427,7 @@ btnJoinHost.addEventListener('click', () => {
   connectSignaling(`ws://${ip}:${port}`);
 });
 
-// Tab switching
+// Tab switching (Direct)
 tabHost.addEventListener('click', () => {
   tabHost.classList.add('active');
   tabJoin.classList.remove('active');
@@ -388,6 +440,70 @@ tabJoin.addEventListener('click', () => {
   tabHost.classList.remove('active');
   joinSection.classList.remove('hidden');
   hostSection.classList.add('hidden');
+});
+
+// --- Method 2: Code P2P Handshake (Zero Server, Zero VPN, Zero Router Port) ---
+btnGenerateOffer.addEventListener('click', async () => {
+  updateStatus('connecting');
+  btnGenerateOffer.innerText = 'Gerando... aguarde candidatos STUN';
+
+  createPeerConnection(() => {
+    // When ICE gathering is done, package into base64 code
+    const offerData = {
+      type: 'offer',
+      sdp: peerConnection.localDescription
+    };
+    const code = btoa(JSON.stringify(offerData));
+    p2pCodeBox.value = code;
+    btnGenerateOffer.innerText = 'Código Pronto! Copie e envie.';
+  });
+
+  const offer = await peerConnection.createOffer();
+  await peerConnection.setLocalDescription(offer);
+});
+
+btnCopyCode.addEventListener('click', () => {
+  const code = p2pCodeBox.value.trim();
+  if (code) {
+    navigator.clipboard.writeText(code);
+    alert('Código copiado para a área de transferência!');
+  }
+});
+
+btnApplyCode.addEventListener('click', async () => {
+  const rawCode = p2pCodeBox.value.trim();
+  if (!rawCode) {
+    alert('Cole o código do seu amigo na caixa de texto primeiro!');
+    return;
+  }
+
+  try {
+    const data = JSON.parse(atob(rawCode));
+
+    if (data.type === 'offer') {
+      // Amigo recebeu a oferta: gera a resposta (answer)
+      updateStatus('connecting');
+      createPeerConnection(async () => {
+        const answerData = {
+          type: 'answer',
+          sdp: peerConnection.localDescription
+        };
+        p2pCodeBox.value = btoa(JSON.stringify(answerData));
+        alert('Código de resposta gerado! Clique em Copiar Código e envie de volta para seu amigo.');
+      });
+
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+
+    } else if (data.type === 'answer') {
+      // Host original recebe a resposta
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      alert('Conexão P2P finalizada! Estabelecendo áudio e vídeo...');
+    }
+  } catch (err) {
+    alert('Código inválido ou corrompido: ' + err.message);
+  }
 });
 
 // Audio Mute & Deafen
@@ -477,7 +593,6 @@ async function startScreenCapture(sourceId) {
     btnShareScreen.classList.add('hidden');
     btnStopShare.classList.remove('hidden');
 
-    // Add track to peer connection
     const videoTrack = localScreenStream.getVideoTracks()[0];
     if (peerConnection) {
       const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
@@ -485,7 +600,6 @@ async function startScreenCapture(sourceId) {
         sender.replaceTrack(videoTrack);
       } else {
         peerConnection.addTrack(videoTrack, localScreenStream);
-        // Renegotiate
         if (ws && ws.readyState === WebSocket.OPEN) {
           makeOffer();
         }
