@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CyberTalkie</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <span class="logo-icon">⚡</span>
+        <h1>CyberTalkie <span class="badge">Ultra-Low Latency P2P</span></h1>
+      </div>
+      <div class="connection-status" id="connectionStatus">
+        <span class="status-indicator" id="statusDot"></span>
+        <span id="statusText">Desconectado</span>
+      </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <div class="main-content">
+      <!-- Left Panel: Connection & Audio Controls -->
+      <div class="sidebar">
+        <!-- Mode Tabs -->
+        <div class="panel card">
+          <h2>Modo de Conexão</h2>
+          <div class="mode-selector">
+            <button class="tab-btn active" id="tabHost">Criar Sala (Host)</button>
+            <button class="tab-btn" id="tabJoin">Conectar (Amigo)</button>
+          </div>
+
+          <!-- Host View -->
+          <div id="hostSection" class="mode-content">
+            <div class="form-group">
+              <label>Porta Local:</label>
+              <input type="number" id="hostPort" value="8765" />
+            </div>
+            <button class="btn btn-primary" id="btnStartHost">Iniciar Sala Local</button>
+            <div id="hostInfo" class="info-box hidden">
+              <p>Envie este endereço para seu amigo:</p>
+              <div class="ip-list" id="localIpList"></div>
+            </div>
+          </div>
+
+          <!-- Join View -->
+          <div id="joinSection" class="mode-content hidden">
+            <div class="form-group">
+              <label>IP do Host (ou Radmin/ZeroTier/Tailscale):</label>
+              <input type="text" id="joinIp" placeholder="Ex: 192.168.1.50 ou IP VPN" />
+            </div>
+            <div class="form-group">
+              <label>Porta:</label>
+              <input type="number" id="joinPort" value="8765" />
+            </div>
+            <button class="btn btn-primary" id="btnJoinHost">Conectar ao Host</button>
+          </div>
+        </div>
+
+        <!-- Audio Settings & Volume -->
+        <div class="panel card">
+          <h2>Controles de Áudio</h2>
+          <div class="device-selector">
+            <div class="form-group">
+              <label for="micSelect">Microfone:</label>
+              <select id="micSelect"></select>
+            </div>
+          </div>
+
+          <div class="audio-controls">
+            <button class="btn-toggle" id="btnToggleMic">
+              <span id="micIcon">🎙️</span> <span id="micLabel">Mutar Mic</span>
+            </button>
+            <button class="btn-toggle" id="btnToggleDeafen">
+              <span id="deafenIcon">🎧</span> <span id="deafenLabel">Ensurdecer</span>
+            </button>
+          </div>
+
+          <!-- VU Meters -->
+          <div class="audio-meters">
+            <div class="meter-group">
+              <span>Seu Mic:</span>
+              <div class="meter-bar">
+                <div class="meter-fill" id="localMeterFill"></div>
+              </div>
+            </div>
+            <div class="meter-group">
+              <span>Amigo:</span>
+              <div class="meter-bar">
+                <div class="meter-fill" id="remoteMeterFill"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Remote Audio Volume Slider -->
+          <div class="form-group" style="margin-top: 10px;">
+            <label>Volume do Amigo: <span id="peerVolumeVal">100%</span></label>
+            <input type="range" id="peerVolumeSlider" min="0" max="200" value="100">
+          </div>
+        </div>
+
+        <!-- Latency / Quality Stats -->
+        <div class="panel card stats-panel">
+          <h2>Estatísticas de Latência</h2>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <span class="stat-label">RTT / Ping P2P:</span>
+              <span class="stat-val" id="statPing">-- ms</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Jitter:</span>
+              <span class="stat-val" id="statJitter">-- ms</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Codec Áudio:</span>
+              <span class="stat-val">Opus 48kHz (LowDelay)</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Tipo Conexão:</span>
+              <span class="stat-val" id="statCandidate">Direta / P2P Local</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Panel: Screen Share & Video Area -->
+      <div class="main-display">
+        <div class="video-container card">
+          <div class="video-header">
+            <div class="title-with-badge">
+              <h2>Transmissão de Tela</h2>
+              <span id="screenLiveBadge" class="live-badge hidden">AO VIVO</span>
+            </div>
+            <div class="screen-actions">
+              <button class="btn btn-secondary" id="btnShareScreen">Compartilhar Minha Tela</button>
+              <button class="btn btn-secondary hidden" id="btnStopShare">Parar Transmissão</button>
+              <button class="btn btn-secondary" id="btnFullscreen">Tela Cheia</button>
+            </div>
+          </div>
+
+          <div class="screen-preview-wrapper" id="previewWrapper">
+            <!-- Remote Screen Video -->
+            <video id="remoteVideo" autoplay playsinline></video>
+            <!-- Local Screen Mini Preview -->
+            <video id="localPreviewVideo" autoplay playsinline muted class="hidden local-floating-preview"></video>
+
+            <!-- Placeholder when no screen is shared -->
+            <div class="screen-placeholder" id="screenPlaceholder">
+              <div class="placeholder-icon">🖥️</div>
+              <h3>Nenhuma tela sendo compartilhada no momento</h3>
+              <p>Clique em <b>Compartilhar Minha Tela</b> para transmitir para seu amigo com 60 FPS e sem servidor intermediário.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hidden Audio Element for Remote Peer -->
+        <audio id="remoteAudio" autoplay></audio>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen Picker Modal -->
+  <div class="modal hidden" id="screenPickerModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Selecione a Tela ou Janela de Jogo</h3>
+        <button class="btn-close" id="btnCloseModal">&times;</button>
+      </div>
+      <div class="screen-list" id="screenList"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

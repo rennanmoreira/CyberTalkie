@@ -1,0 +1,43 @@
+{
+  "name": "cybertalkie",
+  "version": "1.0.0",
+  "description": "Ultra-low latency P2P voice and screen share for gaming without external servers",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.cybertalkie.app",
+    "productName": "CyberTalkie",
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
+    }
+  },
+  "keywords": [
+    "p2p",
+    "webrtc",
+    "voice-chat",
+    "screen-share",
+    "gaming",
+    "low-latency"
+  ],
+  "author": "Rennan Moreira",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}
